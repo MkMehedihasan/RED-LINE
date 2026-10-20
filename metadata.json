@@ -1,0 +1,8 @@
+{
+  "name": "RED LINE News Portal",
+  "description": "RED LINE - পেশাদার অনলাইন নিউজ পোর্টাল ও ব্রডকাস্ট প্ল্যাটফর্ম। তাজা খবর, ব্রেকিং নিউজ এবং সম্পূর্ণ নিউজ ম্যানেজমেন্ট ও ব্লগার থিম কোড।",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
