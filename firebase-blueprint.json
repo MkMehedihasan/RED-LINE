@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "NewsArticle": {
+      "title": "News Article",
+      "description": "A news article published on the RED LINE news portal",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 300 },
+        "slug": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 50 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "content": { "type": "array" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "imageCaption": { "type": "string", "maxLength": 500 },
+        "reporter": { "type": "string", "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 100 },
+        "publishedAt": { "type": "string" },
+        "readTimeMinutes": { "type": "number" },
+        "views": { "type": "number" },
+        "isBreaking": { "type": "boolean" },
+        "isLead": { "type": "boolean" },
+        "isSpecial": { "type": "boolean" },
+        "tags": { "type": "array" },
+        "comments": { "type": "array" }
+      },
+      "required": ["title", "category", "summary", "content", "imageUrl", "publishedAt"]
+    }
+  },
+  "firestore": {
+    "/articles/{articleId}": {
+      "schema": "NewsArticle",
+      "description": "Collection of all news portal articles and reports"
+    }
+  }
+}

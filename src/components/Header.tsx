@@ -3,15 +3,14 @@ import {
   Clock, 
   Calendar, 
   Search, 
-  PlusCircle, 
-  Code2, 
   ShieldCheck, 
   Menu, 
   X, 
   Share2, 
   Sparkles,
   Flame,
-  Radio
+  Radio,
+  Lock
 } from 'lucide-react';
 import { NewsCategory } from '../types/news';
 import { getBengaliDateTime, LiveBengaliDateTime } from '../utils/bengaliDate';
@@ -20,8 +19,7 @@ interface HeaderProps {
   currentCategory: string;
   onSelectCategory: (cat: string) => void;
   onOpenAdmin: () => void;
-  onOpenBloggerModal: () => void;
-  onOpenCreatePost: () => void;
+  onOpenBloggerModal?: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onGoHome: () => void;
@@ -42,8 +40,6 @@ export const Header: React.FC<HeaderProps> = ({
   currentCategory,
   onSelectCategory,
   onOpenAdmin,
-  onOpenBloggerModal,
-  onOpenCreatePost,
   searchQuery,
   onSearchChange,
   onGoHome
@@ -62,52 +58,51 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-slate-200">
       {/* 1. TOP UTILITY BAR (Live Clock, Date, Weather & Quick Actions) */}
-      <div className="bg-[#0B1120] text-slate-300 text-xs py-2 px-4 border-b border-red-600/50">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#0B1120] text-slate-300 text-xs py-2 px-3 sm:px-4 border-b border-red-600/50">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           {/* Left: Live Bengali Date & Real-time Clock */}
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5 text-slate-200 font-medium">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            {/* Live Indicator */}
+            <div className="flex items-center gap-1.5 bg-red-600/20 border border-red-500/40 px-2 py-0.5 rounded-full text-red-400 font-bold text-[11px]">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
-              <span>ঢাকা</span>
-              <span className="text-slate-500">·</span>
-              <Calendar className="w-3.5 h-3.5 text-red-400" />
-              <span>{bengaliTime.dateStr}</span>
-              <span className="text-slate-500">·</span>
-              <span className="text-amber-400/90">{bengaliTime.banglaEraDate}</span>
+              <span>লাইভ আপডেট</span>
             </div>
 
-            <div className="hidden sm:flex items-center gap-1 text-slate-300 font-english tabular-nums">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{bengaliTime.timeStr}</span>
+            {/* City & Date */}
+            <div className="flex items-center gap-1.5 text-slate-200 font-medium">
+              <span className="text-slate-400">ঢাকা</span>
+              <span className="text-slate-600">·</span>
+              <Calendar className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span className="font-semibold text-white">{bengaliTime.dateStr}</span>
+              <span className="text-slate-600 hidden md:inline">·</span>
+              <span className="text-amber-400/90 hidden md:inline font-medium">{bengaliTime.banglaEraDate}</span>
             </div>
 
-            <div className="hidden md:flex items-center gap-1 text-slate-400">
+            {/* Live Ticking Clock (Hours:Minutes:Seconds in Bengali) */}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 text-amber-300 border border-slate-700/80 px-2.5 py-0.5 rounded-md font-bold text-xs shadow-inner">
+              <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin-slow" />
+              <span className="tracking-wide font-bengali">{bengaliTime.timeStr}</span>
+            </div>
+
+            {/* Weather */}
+            <div className="hidden lg:flex items-center gap-1 text-slate-400 text-[11px]">
               <span className="text-slate-600">|</span>
-              <span>তাপমাত্রা: ২৮° সে. রৌদ্রোজ্জ্বল</span>
+              <span>তাপমাত্রা: ২৮° সে.</span>
             </div>
           </div>
 
           {/* Right: Quick Portal Tool Buttons */}
-          <div className="flex items-center gap-2">
-            {/* Blogger HTML Theme Code Button */}
-            <button
-              onClick={onOpenBloggerModal}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-2.5 py-1 rounded text-[11px] font-semibold transition-all shadow-sm shadow-red-900/30"
-              title="Blogger.com-এর জন্য রেডি এইচটিএমএল থিম কোড দেখুন"
-            >
-              <Code2 className="w-3.5 h-3.5" />
-              <span>ব্লগার থিম কোড (HTML)</span>
-            </button>
-
+          <div className="flex items-center gap-2 ml-auto">
             {/* Admin Dashboard */}
             <button
               onClick={onOpenAdmin}
-              className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded text-[11px] font-medium transition-colors border border-slate-700"
+              className="flex items-center gap-1.5 bg-red-600/90 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-bold transition-all shadow-xs active:scale-95 border border-red-500/50"
+              title="গোপনীয় অ্যাডমিন লগইন (আইডি ও পাসওয়ার্ড সুরক্ষিত)"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <Lock className="w-3.5 h-3.5 text-white" />
               <span>অ্যাডমিন প্যানেল</span>
             </button>
           </div>
@@ -148,8 +143,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Desktop Search Bar & Fast New Post Button */}
-          <div className="hidden lg:flex items-center gap-3 flex-1 max-w-md ml-auto">
+          {/* Desktop Search Bar */}
+          <div className="hidden lg:flex items-center gap-3 flex-1 max-w-sm ml-auto">
             <div className="relative w-full">
               <input
                 type="text"
@@ -168,14 +163,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
             </div>
-
-            <button
-              onClick={onOpenCreatePost}
-              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all shadow-sm active:scale-95"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>নতুন পোস্ট</span>
-            </button>
           </div>
 
           {/* Mobile Right Controls */}
@@ -186,13 +173,6 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Search"
             >
               <Search className="w-5 h-5" />
-            </button>
-            <button
-              onClick={onOpenCreatePost}
-              className="p-2 text-white bg-red-600 hover:bg-red-700 rounded-lg"
-              title="নতুন পোস্ট"
-            >
-              <PlusCircle className="w-5 h-5" />
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -256,16 +236,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </li>
             ))}
-
-            <li className="ml-auto">
-              <button
-                onClick={onOpenBloggerModal}
-                className="px-3 py-2 my-1 text-xs font-medium text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded border border-amber-500/30 transition-colors flex items-center gap-1.5"
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>Blogger XML কোড</span>
-              </button>
-            </li>
           </ul>
         </div>
       </nav>
@@ -305,23 +275,13 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="mt-3 pt-3 border-t border-slate-800 flex flex-col gap-2">
             <button
               onClick={() => {
-                onOpenBloggerModal();
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-center gap-2 bg-red-600 text-white p-2.5 rounded font-semibold text-sm"
-            >
-              <Code2 className="w-4 h-4" />
-              <span>ব্লগার থিম HTML কোড দেখুন</span>
-            </button>
-            <button
-              onClick={() => {
                 onOpenAdmin();
                 setMobileMenuOpen(false);
               }}
-              className="flex items-center justify-center gap-2 bg-slate-800 text-slate-200 p-2.5 rounded font-medium text-sm"
+              className="flex items-center justify-center gap-2 bg-slate-800 text-slate-200 p-2.5 rounded font-medium text-sm border border-slate-700"
             >
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span>অ্যাডমিন ড্যাশবোর্ড</span>
+              <Lock className="w-4 h-4 text-amber-400" />
+              <span>গোপনীয় অ্যাডমিন লগইন</span>
             </button>
           </div>
         </div>

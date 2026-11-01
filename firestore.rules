@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // News articles are publicly readable and writable for the portal
+    match /articles/{articleId} {
+      allow read, write: if true;
+    }
+
+    // Settings & initialization metadata
+    match /_settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // Default deny for other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

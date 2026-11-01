@@ -16,10 +16,19 @@ import {
   Send,
   Bookmark,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Facebook,
+  PhoneCall
 } from 'lucide-react';
 import { NewsArticle, Comment } from '../types/news';
 import { formatNewsTimeAgo, toBengaliNumber } from '../utils/bengaliDate';
+import { 
+  getNewsShareUrl, 
+  getFacebookPromoSnippet, 
+  getFacebookShareUrl, 
+  getWhatsAppShareUrl,
+  copyTextToClipboard 
+} from '../utils/shareUtils';
 
 interface ArticleDetailProps {
   article: NewsArticle;
@@ -55,27 +64,63 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
       ? 'text-lg leading-relaxed' 
       : 'text-base leading-relaxed';
 
-  // Copy standard URL
-  const handleCopyLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+  // Copy standard URL with ?news=ID
+  const handleCopyLink = async () => {
+    const url = getNewsShareUrl(article.id);
+    const success = await copyTextToClipboard(url);
+    if (success) {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
   };
 
-  // Ready-to-paste text for Facebook comments (as requested in user prompt)
-  const handleCopyFacebookPromo = () => {
-    const currentUrl = window.location.href;
-    const promoText = `📌 ${article.title}\n\n👉 পুরো বিস্তারিত খবরটি পড়তে নিচের লিংকে ক্লিক করুন:\n🔗 ${currentUrl}\n\n#REDLINE #News #Bangladesh`;
-    navigator.clipboard.writeText(promoText);
-    setCopiedFbPromo(true);
-    setTimeout(() => setCopiedFbPromo(false), 2500);
+  // Direct Facebook Share Dialog
+  const handleFacebookShare = () => {
+    const fbUrl = getFacebookShareUrl(article.id);
+    window.open(fbUrl, '_blank', 'width=600,height=500,noopener,noreferrer');
+  };
+
+  // Direct WhatsApp Share
+  const handleWhatsAppShare = () => {
+    const waUrl = getWhatsAppShareUrl(article.id, article.title);
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Web Share API to share the article's current URL
+  const handleWebShare = async () => {
+    const shareUrl = getNewsShareUrl(article.id);
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: article.title,
+          text: article.summary || article.title,
+          url: shareUrl
+        });
+      } catch (err: unknown) {
+        if ((err as Error)?.name !== 'AbortError') {
+          // If native share fails or canceled, fallback to clipboard
+          handleCopyLink();
+        }
+      }
+    } else {
+      // Graceful fallback to clipboard copy if Web Share API is unavailable
+      handleCopyLink();
+    }
+  };
+
+  // Ready-to-paste text for Facebook comments
+  const handleCopyFacebookPromo = async () => {
+    const promoText = getFacebookPromoSnippet(article.title, article.id);
+    const success = await copyTextToClipboard(promoText);
+    if (success) {
+      setCopiedFbPromo(true);
+      setTimeout(() => setCopiedFbPromo(false), 2500);
+    }
   };
 
   // Web Speech API Reader (Bengali voice if available, or browser TTS)
   const handleToggleSpeech = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('আপনার ব্রাউজারে টেক্সট-টু-স্পিচ সমর্থিত নয়।');
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       return;
     }
 
@@ -85,7 +130,10 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
       return;
     }
 
-    const fullText = `${article.title}। ${article.summary}। ${article.content.join(' ')}`;
+    const bodyText = Array.isArray(article.content)
+      ? article.content.join(' ')
+      : String(article.content || '');
+    const fullText = `${article.title || ''}। ${article.summary || ''}। ${bodyText}`;
     const utterance = new SpeechSynthesisUtterance(fullText);
     utterance.lang = 'bn-BD';
     utterance.rate = 0.95;
@@ -202,6 +250,16 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
             <span className="hidden sm:inline">{isSpeaking ? 'থামুন' : 'শুনুন'}</span>
           </button>
 
+          {/* Web Share Button */}
+          <button
+            onClick={handleWebShare}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-red-600 hover:bg-red-700 text-white transition-all shadow-xs active:scale-95"
+            title="খবরটি শেয়ার করুন (Web Share)"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>শেয়ার</span>
+          </button>
+
           {/* Print Button */}
           <button
             onClick={() => window.print()}
@@ -228,46 +286,102 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
         )}
       </div>
 
-      {/* 🚀 FACEBOOK COMMENT PROMOTION HELPER TOOL */}
-      <div className="mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h4 className="text-sm font-bold text-blue-900 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              <span>ফেসবুক কমেন্টে শেয়ার করার দ্রুত টুল</span>
-            </h4>
-            <p className="text-xs text-blue-700 mt-0.5">
-              ফেসবুক পোস্টে বা কমেন্টে ড্রপ করার জন্য প্রস্তুতকৃত লিংক ও শিরোনাম এক ক্লিকে কপি করুন
-            </p>
+      {/* 🚀 COMPREHENSIVE NEWS SHARING BAR (Facebook, WhatsApp, Copy Link & Promo) */}
+      <div className="mb-8 p-4 bg-gradient-to-br from-slate-50 via-red-50/20 to-blue-50/30 border border-slate-200 rounded-2xl shadow-xs">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <Share2 className="w-4 h-4 text-red-600" />
+                <span>সংবাদটি সবার সাথে শেয়ার করুন</span>
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                নিচের যেকোনো বাটনে ক্লিক করে ফেসবুক, হোয়াটসঅ্যাপ বা সরাসরি লিংকের মাধ্যমে খবরটি ছড়িয়ে দিন
+              </p>
+            </div>
+
+            {/* Quick Share Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Native Device Share */}
+              <button
+                onClick={handleWebShare}
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-95"
+                title="ডিভাইসের যে কোনো অ্যাপে খবরটি শেয়ার করুন"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>মোবাইল শেয়ার</span>
+              </button>
+
+              {/* Facebook Share */}
+              <button
+                onClick={handleFacebookShare}
+                className="flex items-center gap-1.5 bg-[#1877F2] hover:bg-[#0c63d4] text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-95"
+                title="ফেসবুকে সরাসরি শেয়ার করুন"
+              >
+                <Facebook className="w-3.5 h-3.5 fill-current" />
+                <span>ফেসবুক</span>
+              </button>
+
+              {/* WhatsApp Share */}
+              <button
+                onClick={handleWhatsAppShare}
+                className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1faa50] text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-95"
+                title="হোয়াটসঅ্যাপে পাঠান"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>হোয়াটসঅ্যাপ</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleCopyFacebookPromo}
-              className="flex items-center gap-1.5 bg-[#1877F2] hover:bg-[#0c63d4] text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all active:scale-95"
-            >
-              {copiedFbPromo ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedFbPromo ? 'কপি হয়েছে!' : 'কমেন্ট ফরম্যাট কপি'}</span>
-            </button>
+          {/* Direct Copyable Link Row with Feedback */}
+          <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                readOnly
+                value={getNewsShareUrl(article.id)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-mono select-all focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+            </div>
 
-            <button
-              onClick={handleCopyLink}
-              className="flex items-center gap-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium"
-            >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
-              <span>{copiedLink ? 'লিংক কপি হয়েছে' : 'লিংক কপি'}</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleCopyLink}
+                className={`flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs active:scale-95 ${
+                  copiedLink
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-300'
+                }`}
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5 text-slate-600" />}
+                <span>{copiedLink ? 'লিংক কপি হয়েছে!' : 'লিংক কপি করুন'}</span>
+              </button>
+
+              <button
+                onClick={handleCopyFacebookPromo}
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs active:scale-95 ${
+                  copiedFbPromo
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
+                }`}
+                title="ফেসবুক কমেন্টের জন্য শিরোনাম + লিংক এক সাথে কপি করুন"
+              >
+                {copiedFbPromo ? <Check className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5 text-blue-600" />}
+                <span>{copiedFbPromo ? 'কমেন্ট ফরম্যাট কপি হয়েছে!' : 'FB কমেন্ট ফরম্যাট'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Article Body Content */}
       <div className={`prose prose-slate max-w-none text-slate-800 space-y-4 mb-8 ${fontClass}`}>
-        {article.content.map((paragraph, index) => (
+        {(Array.isArray(article.content) ? article.content : [String(article.content || '')]).map((paragraph, index) => (
           <p key={index} className="leading-relaxed text-justify">
             {index === 0 ? (
               <>
-                <span className="font-bold text-red-600">{article.location} : </span>
+                <span className="font-bold text-red-600">{article.location || 'ঢাকা'} : </span>
                 {paragraph}
               </>
             ) : (
@@ -302,7 +416,7 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
             </h3>
           </div>
 
-          {/* Toggle between Web Comments & Blogger/Facebook Comment explanation */}
+          {/* Toggle between Web Comments & Facebook Comment guide */}
           <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg text-xs font-semibold">
             <button
               onClick={() => setActiveCommentTab('portal')}
@@ -318,7 +432,7 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
                 activeCommentTab === 'fb_preview' ? 'bg-[#1877F2] text-white' : 'text-slate-600'
               }`}
             >
-              Blogger / FB কমেন্ট
+              ফেসবুক শেয়ার ও কমেন্ট
             </button>
           </div>
         </div>
@@ -388,18 +502,18 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
             </div>
           </div>
         ) : (
-          /* Blogger & Facebook Integration Guide */
+          /* Facebook Integration Guide */
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-700 space-y-3">
             <div className="flex items-center gap-2 text-blue-700 font-bold">
-              <span>Blogger এবং Facebook কমেন্ট সিস্টেমের সুবিধা:</span>
+              <span>ফেসবুক কমেন্ট ও সোশ্যাল মিডিয়া ট্রাফিক বাড়ানোর কৌশল:</span>
             </div>
             <p>
-              আপনি যখন এই সাইটটি অথবা উপরের ব্লগার থিম কোডটি ব্যবহার করবেন, তখন প্রতিটি খবরের নিচে ব্লগার-এর নিজস্ব কমেন্ট ফর্ম এবং ফেসবুক কমেন্ট প্লাগইন স্বয়ংক্রিয়ভাবে সক্রিয় থাকবে।
+              পাঠকদের জন্য এই পোর্টালে সরাসরি মন্তব্য করার সুবিধা রয়েছে। পাশাপাশি আপনি যদি ফেসবুক পোস্ট বা কমেন্টে খবরের লিংক ড্রপ করতে চান, তবে উপরের <strong>&quot;কমেন্ট ফরম্যাট কপি&quot;</strong> বোতাম ব্যবহার করুন।
             </p>
             <div className="p-3 bg-white rounded border border-slate-200">
               <span className="font-semibold block text-slate-900 mb-1">💡 ফেসবুক কমেন্ট ট্রিক:</span>
               <span>
-                আপনি ফেসবুকে যেকোনো স্ট্যাটাস বা পেজের পোস্টে লিখুন: <em>&quot;বিস্তারিত খবর কমেন্টের প্রথম লিংকে&quot;</em>। এরপর কমেন্টে আমাদের &quot;কমেন্ট ফরম্যাট কপি&quot; বোতামটি ব্যবহার করে লিংকটি পেস্ট করে দিন। দর্শকরা সরাসরি এখানে এসে পুরো খবর পড়বেন এবং গুগল অ্যাডসেন্স বা ব্লগার ট্রাফিক বৃদ্ধি পাবে!
+                আপনি ফেসবুকে যেকোনো স্ট্যাটাস বা পেজের পোস্টে লিখুন: <em>&quot;বিস্তারিত খবর কমেন্টের প্রথম লিংকে&quot;</em>। এরপর কমেন্টে আমাদের &quot;কমেন্ট ফরম্যাট কপি&quot; বোতামটি ব্যবহার করে লিংকটি পেস্ট করে দিন। পাঠকরা সরাসরি এখানে এসে পুরো খবর পড়বেন!
               </span>
             </div>
           </div>

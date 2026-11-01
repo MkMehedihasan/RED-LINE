@@ -43,24 +43,90 @@ export interface LiveBengaliDateTime {
 
 export function getBengaliDateTime(date: Date = new Date()): LiveBengaliDateTime {
   const dayName = bengaliDays[date.getDay()];
-  const day = toBengaliNumber(date.getDate());
+  const dayNum = date.getDate();
+  const day = toBengaliNumber(dayNum < 10 ? '0' + dayNum : dayNum);
   const month = bengaliMonths[date.getMonth()];
   const year = toBengaliNumber(date.getFullYear());
 
-  let hours = date.getHours();
+  const hours = date.getHours();
   const minutes = date.getMinutes();
   const seconds = date.getSeconds();
-  const ampm = hours >= 12 ? 'সন্ধ্যা/রাত' : hours >= 5 ? 'সকাল' : hours >= 12 ? 'দুপুর' : 'রাত';
+  
+  // Accurate Bengali time of day
+  let ampm = 'রাত';
+  if (hours >= 4 && hours < 6) {
+    ampm = 'ভোর';
+  } else if (hours >= 6 && hours < 12) {
+    ampm = 'সকাল';
+  } else if (hours >= 12 && hours < 15) {
+    ampm = 'দুপুর';
+  } else if (hours >= 15 && hours < 18) {
+    ampm = 'বিকাল';
+  } else if (hours >= 18 && hours < 20) {
+    ampm = 'সন্ধ্যা';
+  } else {
+    ampm = 'রাত';
+  }
   
   const displayHours = hours % 12 || 12;
-  const timeStr = `${ampm} ${toBengaliNumber(displayHours)}:${toBengaliNumber(minutes < 10 ? '0' + minutes : minutes)}:${toBengaliNumber(seconds < 10 ? '0' + seconds : seconds)}`;
+  const hourStr = toBengaliNumber(displayHours < 10 ? '0' + displayHours : displayHours);
+  const minStr = toBengaliNumber(minutes < 10 ? '0' + minutes : minutes);
+  const secStr = toBengaliNumber(seconds < 10 ? '0' + seconds : seconds);
+  const timeStr = `${ampm} ${hourStr}:${minStr}:${secStr}`;
 
-  // Approximate Bangla calendar (১৪৩১/১৪৩২ বঙ্গাব্দ)
-  const banglaYear = toBengaliNumber(date.getFullYear() - 593);
-  const banglaEraDate = `${day} কার্তিক ${banglaYear} বঙ্গাব্দ`;
+  // Bengali Solar Calendar estimation
+  // In November (month index 10), it is Kartik (mid-Oct to mid-Nov)
+  const banglaMonths = [
+    'পৌষ', 'মাঘ', 'ফাল্গুন', 'চৈত্র', 'বৈশাখ', 'জ্যৈষ্ঠ', 
+    'আষাঢ়', 'শ্রাবণ', 'ভাদ্র', 'আশ্বিন', 'কার্তিক', 'অগ্রহায়ণ'
+  ];
+  // Calculate approximate Bangla day & month
+  const m = date.getMonth(); // 0-11
+  const d = date.getDate();
+  let bMonth = '';
+  let bDay = 1;
+  let bYear = date.getFullYear() - 593;
+  if (m === 0) { // Jan
+    if (d <= 14) { bMonth = 'পৌষ'; bDay = d + 16; }
+    else { bMonth = 'মাঘ'; bDay = d - 14; }
+  } else if (m === 1) { // Feb
+    if (d <= 13) { bMonth = 'মাঘ'; bDay = d + 17; }
+    else { bMonth = 'ফাল্গুন'; bDay = d - 13; }
+  } else if (m === 2) { // Mar
+    if (d <= 14) { bMonth = 'ফাল্গুন'; bDay = d + 16; }
+    else { bMonth = 'চৈত্র'; bDay = d - 14; }
+  } else if (m === 3) { // Apr
+    if (d <= 13) { bMonth = 'চৈত্র'; bDay = d + 17; }
+    else { bMonth = 'বৈশাখ'; bDay = d - 13; bYear = date.getFullYear() - 593; }
+  } else if (m === 4) { // May
+    if (d <= 14) { bMonth = 'বৈশাখ'; bDay = d + 17; }
+    else { bMonth = 'জ্যৈষ্ঠ'; bDay = d - 14; }
+  } else if (m === 5) { // Jun
+    if (d <= 14) { bMonth = 'জ্যৈষ্ঠ'; bDay = d + 17; }
+    else { bMonth = 'আষাঢ়'; bDay = d - 14; }
+  } else if (m === 6) { // Jul
+    if (d <= 15) { bMonth = 'আষাঢ়'; bDay = d + 16; }
+    else { bMonth = 'শ্রাবণ'; bDay = d - 15; }
+  } else if (m === 7) { // Aug
+    if (d <= 15) { bMonth = 'শ্রাবণ'; bDay = d + 16; }
+    else { bMonth = 'ভাদ্র'; bDay = d - 15; }
+  } else if (m === 8) { // Sep
+    if (d <= 15) { bMonth = 'ভাদ্র'; bDay = d + 16; }
+    else { bMonth = 'আশ্বিন'; bDay = d - 15; }
+  } else if (m === 9) { // Oct
+    if (d <= 15) { bMonth = 'আশ্বিন'; bDay = d + 15; }
+    else { bMonth = 'কার্তিক'; bDay = d - 15; }
+  } else if (m === 10) { // Nov
+    if (d <= 14) { bMonth = 'কার্তিক'; bDay = d + 16; }
+    else { bMonth = 'অগ্রহায়ণ'; bDay = d - 14; }
+  } else { // Dec
+    if (d <= 14) { bMonth = 'অগ্রহায়ণ'; bDay = d + 16; }
+    else { bMonth = 'পৌষ'; bDay = d - 14; }
+  }
+  const banglaEraDate = `${toBengaliNumber(bDay)} ${bMonth} ${toBengaliNumber(bYear)} বঙ্গাব্দ`;
 
   const dateStr = `${dayName}, ${day} ${month} ${year}`;
-  const fullHeaderStr = `ঢাকা · ${dateStr} · ${banglaEraDate} · আপডেট ${toBengaliNumber(displayHours)}:${toBengaliNumber(minutes < 10 ? '0' + minutes : minutes)}`;
+  const fullHeaderStr = `ঢাকা · ${dateStr} · ${banglaEraDate} · ${timeStr}`;
 
   return {
     dayName,

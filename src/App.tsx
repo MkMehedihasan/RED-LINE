@@ -3,93 +3,136 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { BreakingTicker } from './components/BreakingTicker';
 import { NewsHome } from './components/NewsHome';
 import { ArticleDetail } from './components/ArticleDetail';
 import { AdminPanel } from './components/AdminPanel';
-import { BloggerThemeModal } from './components/BloggerThemeModal';
 import { Footer } from './components/Footer';
 import { INITIAL_NEWS } from './data/initialNews';
 import { NewsArticle } from './types/news';
-
-const STORAGE_KEY = 'redline_news_articles_v1';
+import { 
+  subscribeToArticles, 
+  fetchSingleArticle,
+  addArticleToFirestore, 
+  deleteArticleFromFirestore, 
+  updateArticleInFirestore,
+  addCommentToFirestore,
+  incrementArticleViews,
+  resetFirestoreToDefaults
+} from './services/newsService';
 
 export default function App() {
   const [articles, setArticles] = useState<NewsArticle[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
+      const raw = localStorage.getItem('redline_news_articles_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {
-      console.error('Failed to load news from storage', e);
+    } catch {
+      // ignore
     }
     return INITIAL_NEWS;
   });
-
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
+  const [isLoadingArticle, setIsLoadingArticle] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [adminOpen, setAdminOpen] = useState(false);
-  const [bloggerModalOpen, setBloggerModalOpen] = useState(false);
 
-  // Sync to localStorage
+  // Helper to extract article ID from either URL query (?news=... or ?id=...) or hash (#post-... or #news-...)
+  const getArticleIdFromUrl = useCallback((): string | null => {
+    if (typeof window === 'undefined') return null;
+
+    // 1. Check query parameter (?news=... or ?id=...)
+    const params = new URLSearchParams(window.location.search);
+    const queryId = params.get('news') || params.get('id');
+    if (queryId) return queryId;
+
+    // 2. Check hash (#post-... or #news-... or #...)
+    const hash = window.location.hash;
+    if (hash.startsWith('#post-')) return hash.replace('#post-', '');
+    if (hash.startsWith('#news-')) return hash.replace('#news-', '');
+    if (hash.startsWith('#') && hash.length > 1) return hash.slice(1);
+
+    return null;
+  }, []);
+
+  // 1. Subscribe to Firebase Firestore Realtime Sync
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
-    } catch (e) {
-      console.error('Failed to save news to storage', e);
+    const unsubscribe = subscribeToArticles((liveArticles) => {
+      setArticles(liveArticles);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. URL Routing: Direct News Linking for Facebook, WhatsApp & Shared Links
+  const resolveUrlArticle = useCallback(async () => {
+    const targetId = getArticleIdFromUrl();
+    if (!targetId) {
+      setSelectedArticle(null);
+      return;
     }
-  }, [articles]);
 
-  // Handle URL hash for direct news linking from Facebook comments
+    // Check if article is already loaded in state
+    const foundInState = articles.find((a) => a.id === targetId);
+    if (foundInState) {
+      setSelectedArticle(foundInState);
+      return;
+    }
+
+    // If not found in current state, fetch directly from cloud Firestore
+    setIsLoadingArticle(true);
+    const cloudArticle = await fetchSingleArticle(targetId);
+    setIsLoadingArticle(false);
+
+    if (cloudArticle) {
+      setSelectedArticle(cloudArticle);
+      // Prepend to articles list so related articles and navigation work
+      setArticles((prev) => {
+        if (prev.some((a) => a.id === cloudArticle.id)) return prev;
+        return [cloudArticle, ...prev];
+      });
+    }
+  }, [articles, getArticleIdFromUrl]);
+
   useEffect(() => {
-    const handleHash = () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#post-')) {
-        const id = hash.replace('#post-', '');
-        const found = articles.find((a) => a.id === id);
-        if (found) {
-          setSelectedArticle(found);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      } else if (hash === '' || hash === '#') {
-        setSelectedArticle(null);
-      }
+    resolveUrlArticle();
+
+    const handlePopState = () => {
+      resolveUrlArticle();
     };
 
-    handleHash();
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
-  }, [articles]);
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
+  }, [resolveUrlArticle]);
 
-  // When selecting an article, also update browser hash and increment views
+  // When selecting an article, update browser URL with ?news=ID and scroll up
   const handleSelectArticle = (article: NewsArticle) => {
     setSelectedArticle(article);
-    window.location.hash = `post-${article.id}`;
+    const newUrl = `${window.location.pathname}?news=${encodeURIComponent(article.id)}`;
+    window.history.pushState({ articleId: article.id }, '', newUrl);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Increment views
-    setArticles((prev) =>
-      prev.map((item) =>
-        item.id === article.id ? { ...item, views: item.views + 1 } : item
-      )
-    );
+    // Increment views in Firestore
+    incrementArticleViews(article.id, article.views);
   };
 
   const handleBackToHome = () => {
     setSelectedArticle(null);
-    window.location.hash = '';
+    window.history.pushState({}, '', window.location.pathname);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Add Article (from Admin)
-  const handleAddArticle = (newArticleData: Omit<NewsArticle, 'id' | 'views' | 'comments'>) => {
+  // Add Article (Saves to Firebase Cloud Database and publishes instantly)
+  const handleAddArticle = async (newArticleData: Omit<NewsArticle, 'id' | 'views' | 'comments'>) => {
     const newId = `post-${Date.now()}`;
     const newArticle: NewsArticle = {
       ...newArticleData,
@@ -98,31 +141,67 @@ export default function App() {
       comments: []
     };
 
-    setArticles((prev) => [newArticle, ...prev]);
-    // Optionally open the newly published article
+    // 1. Optimistically update local state immediately
+    setArticles((prev) => [newArticle, ...prev.filter((a) => a.id !== newArticle.id)]);
+
+    // 2. Save directly to Firebase Firestore and local storage backup
+    try {
+      await addArticleToFirestore(newArticle);
+    } catch (err) {
+      console.error('Error saving to cloud Firestore:', err);
+    }
+
+    // 3. Immediately close admin panel and open the published article on screen
+    setAdminOpen(false);
     handleSelectArticle(newArticle);
   };
 
-  // Delete Article (from Admin)
-  const handleDeleteArticle = (id: string) => {
+  // Keep browser document title synced with current article or home
+  useEffect(() => {
+    if (selectedArticle) {
+      document.title = `${selectedArticle.title} | RED LINE`;
+    } else {
+      document.title = 'RED LINE | সত্যের সন্ধানে নির্ভীক নিউজ পোর্টাল';
+    }
+  }, [selectedArticle]);
+
+  // Delete Article (Deletes from Firebase Cloud Database permanently)
+  const handleDeleteArticle = async (id: string) => {
+    // 1. Optimistically remove from state immediately
     setArticles((prev) => prev.filter((a) => a.id !== id));
+
+    // 2. If the deleted article was currently open, go back to home
     if (selectedArticle?.id === id) {
       handleBackToHome();
     }
+
+    // 3. Permanently delete from Firebase Firestore
+    try {
+      await deleteArticleFromFirestore(id);
+    } catch (err) {
+      console.error('Error deleting from cloud Firestore:', err);
+    }
   };
 
-  // Update Article (from Admin)
-  const handleUpdateArticle = (updatedArticle: NewsArticle) => {
+  // Update Article (Updates in Firebase Cloud Database)
+  const handleUpdateArticle = async (updatedArticle: NewsArticle) => {
     setArticles((prev) =>
       prev.map((item) => (item.id === updatedArticle.id ? updatedArticle : item))
     );
+
     if (selectedArticle?.id === updatedArticle.id) {
       setSelectedArticle(updatedArticle);
+    }
+
+    try {
+      await updateArticleInFirestore(updatedArticle);
+    } catch (err) {
+      console.error('Error updating in cloud Firestore:', err);
     }
   };
 
   // Add Comment to Article
-  const handleAddComment = (articleId: string, author: string, content: string) => {
+  const handleAddComment = async (articleId: string, author: string, content: string) => {
     const newComment = {
       id: `c-${Date.now()}`,
       author,
@@ -131,6 +210,10 @@ export default function App() {
       likes: 0
     };
 
+    const targetArticle = articles.find((a) => a.id === articleId);
+    const existingComments = targetArticle?.comments || [];
+
+    // Optimistic update
     setArticles((prev) =>
       prev.map((item) => {
         if (item.id === articleId) {
@@ -144,32 +227,42 @@ export default function App() {
         return item;
       })
     );
+
+    try {
+      await addCommentToFirestore(articleId, newComment, existingComments);
+    } catch (err) {
+      console.error('Failed to save comment to cloud database:', err);
+    }
   };
 
   // Reset to default news
-  const handleResetToDefault = () => {
-    setArticles(INITIAL_NEWS);
-    localStorage.removeItem(STORAGE_KEY);
+  const handleResetToDefault = async () => {
+    try {
+      await resetFirestoreToDefaults();
+    } catch {
+      setArticles(INITIAL_NEWS);
+    }
   };
 
   // Filtered by search query if any
   const displayedArticles = searchQuery.trim()
-    ? articles.filter(
+    ? (articles || []).filter(
         (a) =>
-          a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          a.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          a.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (a.tags && a.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())))
+          a &&
+          (a.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          a.summary?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          a.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (a.tags && a.tags.some((t) => t?.toLowerCase().includes(searchQuery.toLowerCase()))))
       )
-    : articles;
+    : (articles || []);
 
   // Breaking news items
-  const breakingNews = articles.filter((a) => a.isBreaking);
+  const breakingNews = (articles || []).filter((a) => a && a.isBreaking);
 
   // Related articles for single post view
   const relatedArticles = selectedArticle
-    ? articles
-        .filter((a) => a.category === selectedArticle.category && a.id !== selectedArticle.id)
+    ? (articles || [])
+        .filter((a) => a && a.category === selectedArticle.category && a.id !== selectedArticle.id)
         .slice(0, 3)
     : [];
 
@@ -180,13 +273,9 @@ export default function App() {
         currentCategory={selectedCategory}
         onSelectCategory={(cat) => {
           setSelectedCategory(cat);
-          setSelectedArticle(null);
-          window.location.hash = '';
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          handleBackToHome();
         }}
         onOpenAdmin={() => setAdminOpen(true)}
-        onOpenBloggerModal={() => setBloggerModalOpen(true)}
-        onOpenCreatePost={() => setAdminOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={(q) => setSearchQuery(q)}
         onGoHome={handleBackToHome}
@@ -200,7 +289,12 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1">
-        {selectedArticle ? (
+        {isLoadingArticle ? (
+          <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+            <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-600 font-medium">খবরটি ক্লাউড থেকে লোড হচ্ছে...</p>
+          </div>
+        ) : selectedArticle ? (
           /* Single Article Detail Page */
           <ArticleDetail
             article={selectedArticle}
@@ -227,11 +321,8 @@ export default function App() {
       <Footer
         onSelectCategory={(cat) => {
           setSelectedCategory(cat);
-          setSelectedArticle(null);
-          window.location.hash = '';
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          handleBackToHome();
         }}
-        onOpenBloggerModal={() => setBloggerModalOpen(true)}
         onOpenAdmin={() => setAdminOpen(true)}
       />
 
@@ -245,12 +336,6 @@ export default function App() {
         onUpdateArticle={handleUpdateArticle}
         onResetToDefault={handleResetToDefault}
         onViewArticle={handleSelectArticle}
-      />
-
-      {/* Blogger Theme Code Modal */}
-      <BloggerThemeModal
-        isOpen={bloggerModalOpen}
-        onClose={() => setBloggerModalOpen(false)}
       />
     </div>
   );

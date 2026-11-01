@@ -6,21 +6,20 @@ import {
   Facebook, 
   Youtube, 
   Twitter, 
-  Code2, 
   ShieldCheck,
-  Globe
+  Globe,
+  Lock
 } from 'lucide-react';
 import { toBengaliNumber } from '../utils/bengaliDate';
 
 interface FooterProps {
   onSelectCategory: (cat: string) => void;
-  onOpenBloggerModal: () => void;
+  onOpenBloggerModal?: () => void;
   onOpenAdmin: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onSelectCategory,
-  onOpenBloggerModal,
   onOpenAdmin
 }) => {
   return (
@@ -127,29 +126,22 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          {/* Col 4: Blogger & Special Features */}
+          {/* Col 4: Special Notice & Admin Access */}
           <div className="space-y-3">
             <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-2 border-b border-red-600/60 pb-1 inline-block">
-              বিশেষ টুলস
+              বিজ্ঞাপন ও বার্তা
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              গুগল ব্লগারে একই ডিজাইনের নিউজপেপার চালাতে আমাদের তৈরি রেডিমেড ব্লগার এক্সএমএল কোড ব্যবহার করুন।
+              ২৪ ঘণ্টা বস্তুনিষ্ঠ খবর ও তথ্যের জন্য আমাদের সাথেই থাকুন। সংবাদ বা মতামত পাঠাতে আমাদের বার্তা কক্ষে যোগাযোগ করুন।
             </p>
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={onOpenBloggerModal}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-3 rounded-lg transition-colors shadow-sm"
-              >
-                <Code2 className="w-4 h-4" />
-                <span>Blogger HTML কোড ডাউনলোড</span>
-              </button>
-
+            <div className="pt-2">
               <button
                 onClick={onOpenAdmin}
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-3 rounded-lg border border-slate-700 transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2.5 px-3 rounded-lg border border-slate-700 transition-colors shadow-xs"
+                title="গোপনীয় অ্যাডমিন লগইন (আইডি ও পাসওয়ার্ড সুরক্ষিত)"
               >
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
-                <span>নিউজ অ্যাডমিন প্যানেল</span>
+                <Lock className="w-4 h-4 text-amber-400" />
+                <span>গোপনীয় অ্যাডমিন লগইন</span>
               </button>
             </div>
           </div>
@@ -159,7 +151,7 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 text-center sm:text-left">
           <p>© {toBengaliNumber(new Date().getFullYear())} RED LINE · সর্বস্বত্ব সংরক্ষিত।</p>
           <p>
-            Developed for Professional News Portal &amp; Google Blogger Integration
+            সত্যের সন্ধানে নির্ভীক · অনলাইন নিউজ মিডিয়া প্ল্যাটফর্ম
           </p>
         </div>
       </div>

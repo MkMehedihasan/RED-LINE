@@ -14,8 +14,17 @@ export const BreakingTicker: React.FC<BreakingTickerProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Fallback if no breaking news flagged
-  const items = breakingArticles.length > 0 ? breakingArticles : [];
+  // Filter to only valid articles with title
+  const items = (breakingArticles || []).filter(
+    (a): a is NewsArticle => Boolean(a && typeof a === 'object' && a.id && a.title)
+  );
+
+  // Reset index if items shrink or change
+  useEffect(() => {
+    if (items.length > 0 && currentIndex >= items.length) {
+      setCurrentIndex(0);
+    }
+  }, [items.length, currentIndex]);
 
   useEffect(() => {
     if (items.length <= 1 || isPaused) return;
@@ -29,15 +38,21 @@ export const BreakingTicker: React.FC<BreakingTickerProps> = ({
 
   if (items.length === 0) return null;
 
-  const currentItem = items[currentIndex];
+  // Safe index calculation prevents out-of-bounds access
+  const safeIndex = items.length > 0 ? ((currentIndex % items.length) + items.length) % items.length : 0;
+  const currentItem = items[safeIndex];
+
+  if (!currentItem || !currentItem.title) return null;
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (items.length === 0) return;
     setCurrentIndex((prev) => (prev - 1 + items.length) % items.length);
   };
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (items.length === 0) return;
     setCurrentIndex((prev) => (prev + 1) % items.length);
   };
 
@@ -54,7 +69,7 @@ export const BreakingTicker: React.FC<BreakingTickerProps> = ({
         <div
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
-          onClick={() => onSelectArticle(currentItem)}
+          onClick={() => currentItem && onSelectArticle(currentItem)}
           className="flex-1 px-3 md:px-4 flex items-center overflow-hidden cursor-pointer group"
         >
           <div className="flex items-center gap-2 truncate">
@@ -82,7 +97,7 @@ export const BreakingTicker: React.FC<BreakingTickerProps> = ({
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="text-[11px] font-english text-slate-400 px-1 select-none">
-            {currentIndex + 1}/{items.length}
+            {safeIndex + 1}/{items.length}
           </span>
           <button
             onClick={handleNext}
